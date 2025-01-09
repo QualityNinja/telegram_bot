@@ -5,6 +5,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 from pytz import timezone
+import uuid
 
 # Логирование
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
@@ -82,7 +83,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data[user_id]["notifications"].append(notification)
             user_data[user_id]["step"] = None  # Завершаем ввод
 
-            job_name = f"notification_{user_id}_{len(user_data[user_id]['notifications']) - 1}"
+            # Генерация уникального job_id с использованием uuid
+            job_name = str(uuid.uuid4())  # Генерация уникального ID
+
             scheduler.add_job(
                 send_notification_wrapper,
                 'date',
@@ -92,12 +95,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             await update.message.reply_text(
-                f"Уведомление сохранено! Мы отправим его {notification_time.strftime('%Y-%m-%d %H:%M')} (UTC).",
+                f"Уведомление '{user_data[user_id]['current_text']}' успешно сохранено для {notification_time.strftime('%Y-%m-%d %H:%M')}.",
                 reply_markup=get_keyboard(user_id)
             )
         except ValueError:
-            await update.message.reply_text("Неверный формат даты. Попробуйте снова.",
-                                            reply_markup=get_keyboard(user_id))
+            await update.message.reply_text("Неверный формат даты. Попробуйте снова.", reply_markup=get_keyboard(user_id))
 
 
 # Функция для перехода назад
