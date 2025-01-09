@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 from pytz import timezone
@@ -15,7 +15,6 @@ scheduler.start()
 
 # Хранилище уведомлений
 user_data = {}
-
 
 # Функция для создания клавиатуры с кнопкой "Назад"
 def get_keyboard(user_id, notifications_page=False):
@@ -119,9 +118,12 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Обработчик для удаления уведомления по номеру
 async def delete_notification(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
-    if user_id in user_data and user_data[user_id]["step"] == "delete":
+    message = update.message.text
+
+    if message.startswith("Удалить уведомление №"):
         try:
-            notification_number = int(update.message.text.split()[-1]) - 1
+            # Извлекаем номер уведомления из текста
+            notification_number = int(message.split()[-1]) - 1
             if 0 <= notification_number < len(user_data[user_id]["notifications"]):
                 # Удаляем уведомление из списка
                 del user_data[user_id]["notifications"][notification_number]
@@ -130,7 +132,7 @@ async def delete_notification(update: Update, context: ContextTypes.DEFAULT_TYPE
                 job_name = f"notification_{user_id}_{notification_number + 1}"
                 scheduler.remove_job(job_name)
 
-                # Обновляем клавиатуру
+                # Обновляем клавиатуру и информируем пользователя
                 await update.message.reply_text("Уведомление удалено.",
                                                 reply_markup=get_keyboard(user_id, notifications_page=True))
             else:
@@ -176,7 +178,7 @@ async def send_notification(user_id, notification_number):
 
 # Запуск бота
 if __name__ == "__main__":
-    application = ApplicationBuilder().token("7899393512:AAFb8-b4_fa9EBKHNaxTPmYlUof4nnMo4h4").build()
+    application = ApplicationBuilder().token("YOUR_BOT_API_KEY").build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, delete_notification))
