@@ -178,7 +178,7 @@ async def send_notification(user_id, notification_number):
 
 # Запуск бота
 if __name__ == "__main__":
-    application = ApplicationBuilder().token("YOUR_BOT_API_KEY").build()
+    application = ApplicationBuilder().token("7899393512:AAFb8-b4_fa9EBKHNaxTPmYlUof4nnMo4h4").build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, delete_notification))
