@@ -20,6 +20,7 @@ user_data = {}
 def get_keyboard():
     keyboard = [
         [KeyboardButton("Старт"), KeyboardButton("Удалить последнее уведомление")],
+        [KeyboardButton("Показать сохраненные сообщения")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -39,6 +40,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif message == "Удалить последнее уведомление":
         await delete_last_notification(update, context)
+        return
+    elif message == "Показать сохраненные сообщения":
+        await show_saved_notifications(update, context)
         return
 
     if user_id not in user_data or "step" not in user_data[user_id]:
@@ -85,6 +89,19 @@ async def delete_last_notification(update: Update, context: ContextTypes.DEFAULT
         scheduler.remove_job(job_name)
         del user_data[user_id]
         await update.message.reply_text("Последнее уведомление удалено.", reply_markup=get_keyboard())
+    else:
+        await update.message.reply_text("У вас нет сохраненных уведомлений.", reply_markup=get_keyboard())
+
+# Обработчик для показа сохраненных уведомлений
+async def show_saved_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_chat.id
+    if user_id in user_data and "text" in user_data[user_id] and "date" in user_data[user_id]:
+        notification_text = user_data[user_id]["text"]
+        notification_date = user_data[user_id]["date"].strftime('%Y-%m-%d %H:%M (UTC)')
+        await update.message.reply_text(
+            f"Сохраненное уведомление:\n\nТекст: {notification_text}\nДата и время: {notification_date}",
+            reply_markup=get_keyboard()
+        )
     else:
         await update.message.reply_text("У вас нет сохраненных уведомлений.", reply_markup=get_keyboard())
 
