@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 from pytz import timezone
@@ -16,7 +16,7 @@ scheduler.start()
 # Хранилище уведомлений
 user_data = {}
 
-# Функция для создания клавиатуры с кнопкой "Назад"
+# Функция для создания клавиатуры
 def get_keyboard(user_id, notifications_page=False):
     keyboard = []
 
@@ -57,6 +57,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await go_back(update, context)
         return
 
+    # Обработка шагов (текст -> дата)
     if user_id not in user_data or "step" not in user_data[user_id]:
         await update.message.reply_text("Пожалуйста, начните с команды /start.", reply_markup=get_keyboard(user_id))
         return
@@ -81,7 +82,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data[user_id]["notifications"].append(notification)
             user_data[user_id]["step"] = None  # Завершаем ввод
 
-            job_name = f"notification_{user_id}_{len(user_data[user_id]['notifications'])}"
+            job_name = f"notification_{user_id}_{len(user_data[user_id]['notifications']) - 1}"
             scheduler.add_job(
                 send_notification_wrapper,
                 'date',
@@ -115,21 +116,20 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Вы находитесь на главном экране.", reply_markup=get_keyboard(user_id))
 
 
-# Обработчик для удаления уведомления по номеру
+# Обработчик для удаления уведомлений
 async def delete_notification(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
     message = update.message.text
 
     if message.startswith("Удалить уведомление №"):
         try:
-            # Извлекаем номер уведомления из текста
             notification_number = int(message.split()[-1]) - 1
             if 0 <= notification_number < len(user_data[user_id]["notifications"]):
                 # Удаляем уведомление из списка
                 del user_data[user_id]["notifications"][notification_number]
 
-                # Удаляем job из планировщика
-                job_name = f"notification_{user_id}_{notification_number + 1}"
+                # Обновляем задачи в планировщике
+                job_name = f"notification_{user_id}_{notification_number}"
                 scheduler.remove_job(job_name)
 
                 # Обновляем клавиатуру и информируем пользователя
@@ -143,7 +143,7 @@ async def delete_notification(update: Update, context: ContextTypes.DEFAULT_TYPE
                                             reply_markup=get_keyboard(user_id, notifications_page=True))
 
 
-# Обработчик для показа сохраненных уведомлений
+# Показываем все сохраненные уведомления
 async def show_saved_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
     if user_id in user_data and user_data[user_id]["notifications"]:
@@ -157,12 +157,6 @@ async def show_saved_notifications(update: Update, context: ContextTypes.DEFAULT
 
 
 # Отправка уведомления
-def send_notification_wrapper(user_id, notification_number):
-    new_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(new_loop)
-    new_loop.run_until_complete(send_notification(user_id, notification_number))
-
-
 async def send_notification(user_id, notification_number):
     try:
         if user_id in user_data and notification_number < len(user_data[user_id]["notifications"]):
@@ -176,12 +170,16 @@ async def send_notification(user_id, notification_number):
         logging.error(f"Ошибка при отправке уведомления пользователю {user_id}: {e}")
 
 
+# Обертка для отправки уведомлений (упрощение асинхронной работы)
+def send_notification_wrapper(user_id, notification_number):
+    asyncio.create_task(send_notification(user_id, notification_number))
+
+
 # Запуск бота
 if __name__ == "__main__":
     application = ApplicationBuilder().token("7899393512:AAFb8-b4_fa9EBKHNaxTPmYlUof4nnMo4h4").build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, delete_notification))
     logging.info("Бот запущен!")
     application.run_polling()
 
