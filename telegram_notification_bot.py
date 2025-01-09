@@ -18,15 +18,17 @@ user_data = {}
 
 
 # Функция для создания клавиатуры с кнопкой "Назад"
-def get_keyboard(user_id):
-    keyboard = [
-        [KeyboardButton("Старт"), KeyboardButton("Удалить уведомление")],
-        [KeyboardButton("Показать сохраненные уведомления")]
-    ]
+def get_keyboard(user_id, notifications_page=False):
+    keyboard = []
 
-    # Если пользователь находится в процессе создания уведомления, добавляем кнопку "Назад"
-    if "step" in user_data.get(user_id, {}) and user_data[user_id]["step"] in ["text", "date"]:
+    if notifications_page:
+        if user_id in user_data and user_data[user_id]["notifications"]:
+            for i, notification in enumerate(user_data[user_id]["notifications"], start=1):
+                keyboard.append([KeyboardButton(f"Удалить уведомление № {i}")])
         keyboard.append([KeyboardButton("Назад")])
+    else:
+        keyboard.append([KeyboardButton("Старт"), KeyboardButton("Удалить уведомление")])
+        keyboard.append([KeyboardButton("Показать сохраненные уведомления")])
 
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -115,13 +117,28 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # Обработчик для удаления уведомления по номеру
-async def delete_notification_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def delete_notification(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
-    if user_id in user_data and user_data[user_id]["notifications"]:
-        await update.message.reply_text("Введите номер уведомления, которое хотите удалить:")
-        user_data[user_id]["step"] = "delete"
-    else:
-        await update.message.reply_text("У вас нет сохраненных уведомлений.", reply_markup=get_keyboard(user_id))
+    if user_id in user_data and user_data[user_id]["step"] == "delete":
+        try:
+            notification_number = int(update.message.text.split()[-1]) - 1
+            if 0 <= notification_number < len(user_data[user_id]["notifications"]):
+                # Удаляем уведомление из списка
+                del user_data[user_id]["notifications"][notification_number]
+
+                # Удаляем job из планировщика
+                job_name = f"notification_{user_id}_{notification_number + 1}"
+                scheduler.remove_job(job_name)
+
+                # Обновляем клавиатуру
+                await update.message.reply_text("Уведомление удалено.",
+                                                reply_markup=get_keyboard(user_id, notifications_page=True))
+            else:
+                await update.message.reply_text("Неверный номер уведомления. Попробуйте снова.",
+                                                reply_markup=get_keyboard(user_id, notifications_page=True))
+        except ValueError:
+            await update.message.reply_text("Введите корректный номер.",
+                                            reply_markup=get_keyboard(user_id, notifications_page=True))
 
 
 # Обработчик для показа сохраненных уведомлений
@@ -132,7 +149,7 @@ async def show_saved_notifications(update: Update, context: ContextTypes.DEFAULT
         message_text = "Сохраненные уведомления:\n"
         for i, notification in enumerate(notifications, start=1):
             message_text += f"\nНомер: {i}\nТекст: {notification['text']}\nДата и время: {notification['date'].strftime('%Y-%m-%d %H:%M (UTC)')}\n"
-        await update.message.reply_text(message_text, reply_markup=get_keyboard(user_id))
+        await update.message.reply_text(message_text, reply_markup=get_keyboard(user_id, notifications_page=True))
     else:
         await update.message.reply_text("У вас нет сохраненных уведомлений.", reply_markup=get_keyboard(user_id))
 
@@ -162,6 +179,7 @@ if __name__ == "__main__":
     application = ApplicationBuilder().token("7899393512:AAFb8-b4_fa9EBKHNaxTPmYlUof4nnMo4h4").build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, delete_notification))
     logging.info("Бот запущен!")
     application.run_polling()
 
