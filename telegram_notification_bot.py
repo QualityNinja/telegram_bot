@@ -49,7 +49,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await start(update, context)
         return
     elif message == "Удалить уведомление":
-        await delete_notification_prompt(update, context)
+        await delete_notification(update, context)
         return
     elif message == "Показать сохраненные уведомления":
         await show_saved_notifications(update, context)
